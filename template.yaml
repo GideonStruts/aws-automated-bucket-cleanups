@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Nightly cleanup of expired S3 database backups. The newest backup in each series is always kept.
+
+Parameters:
+  RetentionDays:
+    Type: String
+    Default: "7"
+    Description: Delete backup objects strictly older than this many days.
+  DryRun:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: true logs the delete plan and does not call delete.
+  BackupSuffixes:
+    Type: String
+    Default: ".sql,.sql.gz,.sql.bz2,.sql.xz,.sql.zip,.sql.zst,.dump,.dump.gz,.dump.bz2,.backup,.bak,.rdb"
+    Description: Comma-separated object suffixes treated as database backups. Replaces the built-in list.
+  Buckets:
+    Type: String
+    Default: ""
+    Description: Optional comma-separated bucket allowlist. Empty scans every bucket in the account.
+  Regions:
+    Type: String
+    Default: ""
+    Description: Optional comma-separated region allowlist. Empty scans every region.
+
+Resources:
+  CleanupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: automated-bucket-cleanups
+      Description: Deletes expired S3 database backups and always keeps the newest file in each series.
+      CodeUri: dist/
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Architectures:
+        - arm64
+      Timeout: 900
+      MemorySize: 512
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          RETENTION_DAYS: !Ref RetentionDays
+          DRY_RUN: !Ref DryRun
+          BACKUP_SUFFIXES: !Ref BackupSuffixes
+          BUCKETS: !Ref Buckets
+          REGIONS: !Ref Regions
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListAllMyBuckets
+                - s3:GetBucketLocation
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: "arn:aws:s3:::*"
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: "arn:aws:s3:::*/*"
+      Events:
+        MidnightUtc:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)
+            Name: automated-bucket-cleanups-midnight
+            Description: Delete expired S3 database backups at 00:00 UTC
+            Enabled: true
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name
+    Value: !Ref CleanupFunction
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt CleanupFunction.Arn

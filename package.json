@@ -1,0 +1,18 @@
+{
+  "name": "automated-bucket-cleanups",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist/index.js && node --input-type=commonjs -e \"require('fs').writeFileSync('dist/package.json','{\\\"type\\\":\\\"commonjs\\\"}\\n')\"",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}
